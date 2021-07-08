@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  rest-to-s3-api-demo
+  
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          Description: Usage plan for this API
+          Quota:
+            Limit: 500
+            Period: MONTH
+          Throttle:
+            BurstLimit: 100
+            RateLimit: 50
+  Bucket:
+    Type: AWS::S3::Bucket
+  APILambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref Bucket
+      Events:
+        Put:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /{key}
+            Method: post
+        Get:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /{key}
+            Method: get
+      Policies:
+      - Statement:
+        - Sid: BucketPermissions
+          Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:GetObject
+          Resource: !Sub
+            - ${Bucket}/*
+            - { Bucket: !GetAtt Bucket.Arn }
+
+Outputs:
+  API:
+    Description: "The API Gateway endpoint URL for the Prod stage"
+    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  APIKey:
+    Description: "APIKeyId"
+    Value: !Ref MyApiApiKey
+  APILambda:
+    Description: "API Lambda Function ARN"
+    Value: !GetAtt APILambda.Arn
+  APILambdaIamRole:
+    Description: "IAM Role created for the API Lambda function"
+    Value: !GetAtt APILambdaRole.Arn
+  BucketName:
+    Description: "The name of the S3 Bucket used to store our data"
+    Value: !Ref Bucket
